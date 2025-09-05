@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { marketDataService } from '../services/api';
+import authService from '../services/auth';
 
 const TradingContext = createContext();
 
@@ -89,6 +91,26 @@ function tradingReducer(state, action) {
       });
       return { ...state, assets: updatedAssets };
     
+    case 'UPDATE_MARKET_DATA':
+      const marketData = action.payload;
+      const newAssets = { ...state.assets };
+      
+      // Update existing assets with real market data
+      Object.keys(marketData).forEach(symbol => {
+        if (newAssets[symbol]) {
+          newAssets[symbol] = {
+            ...newAssets[symbol],
+            price: marketData[symbol].price,
+            change: marketData[symbol].change,
+            volume24h: marketData[symbol].volume24h,
+            marketCap: marketData[symbol].marketCap,
+            lastUpdated: marketData[symbol].lastUpdated,
+          };
+        }
+      });
+      
+      return { ...state, assets: newAssets };
+    
     case 'COMPLETE_MODULE':
       return {
         ...state,
@@ -107,11 +129,24 @@ function tradingReducer(state, action) {
 export function TradingProvider({ children }) {
   const [state, dispatch] = useReducer(tradingReducer, initialState);
 
-  // Simulate real-time price updates
+  // Fetch real market data and simulate real-time updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      dispatch({ type: 'UPDATE_ASSET_PRICES' });
-    }, 3000);
+    const fetchMarketData = async () => {
+      try {
+        const marketData = await marketDataService.getMarketData();
+        dispatch({ type: 'UPDATE_MARKET_DATA', payload: marketData });
+      } catch (error) {
+        console.error('Failed to fetch market data:', error);
+        // Fallback to mock price updates
+        dispatch({ type: 'UPDATE_ASSET_PRICES' });
+      }
+    };
+
+    // Initial fetch
+    fetchMarketData();
+
+    // Set up periodic updates
+    const interval = setInterval(fetchMarketData, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
